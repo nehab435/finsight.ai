@@ -22,11 +22,11 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'FinSight Server is healthy and running!' });
 });
 
-app.use('/api/auth', require(path.join(__dirname, 'routes/auth')));
-app.use('/api/documents', require(path.join(__dirname, 'routes/document')));
-app.use('/api/chat', require(path.join(__dirname, 'routes/chat')));
-app.use('/api/accounts', require(path.join(__dirname, 'routes/account')));
-app.use('/api/insights', require(path.join(__dirname, 'routes/insights')));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/documents', require('./routes/document'));
+app.use('/api/chat', require('./routes/chat'));
+app.use('/api/accounts', require('./routes/account'));
+app.use('/api/insights', require('./routes/insights'));
 
 // Start Server
 const PORT = process.env.PORT || 5000;
