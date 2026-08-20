@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Document = require('../models/Document');
+const Chat = require('../models/Chat');
 const jwt = require('jsonwebtoken');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -17,34 +18,61 @@ const auth = (req, res, next) => {
   }
 };
 
+// GET chat history for user
+router.get('/', auth, async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id || req.user.userId;
+    let chat = await Chat.findOne({ user: userId });
+    
+    if (!chat) {
+      chat = await Chat.create({
+        user: userId,
+        messages: [{ sender: 'ai', text: '👋 Hello! Ask me anything about your uploaded financial documents.' }]
+      });
+    }
+    
+    res.json(chat.messages);
+  } catch (err) {
+    console.error("Fetch History Error:", err);
+    res.status(500).json({ message: 'Failed to fetch chat history' });
+  }
+});
+
+// POST new message & get AI response
 router.post('/', auth, async (req, res) => {
   try {
     const { message } = req.body;
     const userId = req.user.id || req.user._id || req.user.userId;
 
+    let chat = await Chat.findOne({ user: userId });
+    if (!chat) {
+      chat = await Chat.create({ user: userId, messages: [] });
+    }
+
+    // Push user message
+    chat.messages.push({ sender: 'user', text: message });
+
+    // Fetch user documents for AI context
     const userDocs = await Document.find({ user: userId });
-    
-    // Provide a richer context package to the chat model
-    const docContext = userDocs.map(d => `
-      File Name: ${d.fileName}
-      Status: ${d.status}
-      Extracted Value/Total: ${d.totalAssets}
-      AI Summary: ${d.summary}
-    `).join('\n---\n');
+    const docContext = userDocs.map(d => `File: ${d.fileName}, Total: ${d.totalAssets}, Summary: ${d.summary}`).join('\n');
 
     const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
     const prompt = `
-      You are FinSight AI, an expert personal financial advisor and tax/document analyst. 
-      You have access to the following documents uploaded by the user:
+      You are FinSight AI, a financial assistant. User documents context:
       ${docContext}
 
       User Question: "${message}"
-      
-      Provide a smart, professional, accurate, and detailed answer. If referencing specific amounts, cite them clearly from the context.
+      Provide a concise, professional answer.
     `;
 
     const result = await model.generateContent(prompt);
-    res.json({ reply: result.response.text() });
+    const aiReply = result.response.text();
+
+    // Push AI reply
+    chat.messages.push({ sender: 'ai', text: aiReply });
+    await chat.save();
+
+    res.json({ reply: aiReply, messages: chat.messages });
   } catch (err) {
     console.error("Chat Error:", err);
     res.status(500).json({ message: 'Chat failed' });

@@ -1,82 +1,99 @@
-import { useState } from 'react';
-import { register } from '../api/api';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { registerUser } from '../api/api';
 
 export default function Register() {
-  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
-  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
     try {
-      await register(formData);
-      navigate('/login');
+      const { data } = await registerUser({ name, email, password });
+      localStorage.setItem('token', data.token);
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Error creating account');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-finDark transition-colors px-4">
-      <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 dark:border-gray-800">
+    <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-finDark">
+      <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md">
         
-        <div className="text-center mb-8">
-          <div className="text-finGreen flex justify-center mb-3">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <div className="flex flex-col items-center mb-6">
+          <div className="text-finGreen mb-2">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create an Account</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">Start managing your finances with AI.</p>
+          <h2 className="text-2xl font-bold">Create an Account</h2>
+          <p className="text-gray-400 text-sm">Start managing your finances with AI.</p>
         </div>
-        
+
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded-lg mb-6 text-sm text-center font-medium border border-red-100 dark:border-red-800">
+          <div className="mb-4 bg-red-100 text-red-600 text-sm px-4 py-2.5 rounded-xl text-center font-medium">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label>
+            <label className="block text-sm font-medium mb-1">Full Name</label>
             <input 
               type="text" 
-              required 
-              placeholder="John Doe"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-finGreen focus:border-transparent outline-none transition-all"
-              onChange={(e) => setFormData({...formData, name: e.target.value})} 
+              placeholder="e.g. Neha Banala" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full border dark:bg-gray-800 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-finGreen"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+            <label className="block text-sm font-medium mb-1">Email Address</label>
             <input 
               type="email" 
-              required 
-              placeholder="you@example.com"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-finGreen focus:border-transparent outline-none transition-all"
-              onChange={(e) => setFormData({...formData, email: e.target.value})} 
+              placeholder="e.g. neha@example.com" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full border dark:bg-gray-800 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-finGreen"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password</label>
+            <label className="block text-sm font-medium mb-1">Password</label>
             <input 
               type="password" 
-              required 
-              placeholder="••••••••"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-finGreen focus:border-transparent outline-none transition-all"
-              onChange={(e) => setFormData({...formData, password: e.target.value})} 
+              placeholder="••••••••" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full border dark:bg-gray-800 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-finGreen"
             />
           </div>
+
           <button 
             type="submit" 
-            className="w-full bg-finGreen hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg transition-colors shadow-lg shadow-green-500/30 mt-2"
+            disabled={isLoading}
+            className="w-full bg-finGreen hover:bg-green-600 text-white font-medium py-3 rounded-xl transition-colors shadow-lg shadow-green-500/20 mt-2"
           >
-            Create Account
+            {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
-        
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-8">
+
+        <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account? <Link to="/login" className="text-finGreen font-semibold hover:underline">Log in</Link>
         </p>
+
       </div>
     </div>
   );

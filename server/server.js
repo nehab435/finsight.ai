@@ -24,6 +24,8 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/documents', require('./routes/document'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/accounts', require('./routes/account'));
+app.use('/api/insights', require('./routes/insights'));
 
 // Start Server
 const PORT = process.env.PORT || 5000;

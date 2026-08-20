@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sun, Moon, LayoutDashboard, Wallet, FileText, Settings, Trash2, Edit2, Bell, User, LogOut, Mail, ShieldCheck, Upload, Loader2, Calculator } from 'lucide-react';
-import { getDocuments, deleteDocument, updateDocument, getUserProfile, uploadDocument } from '../api/api';
+import { Sun, Moon, LayoutDashboard, Wallet, FileText, Settings, Bell, User, LogOut, Lock, Shield, CheckCircle, Mail, ShieldCheck, Calculator } from 'lucide-react';
+import { getUserProfile, getDocuments, updatePassword } from '../api/api';
 
-export default function Documents() {
+export default function SettingsPage() {
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
   });
-  const [documents, setDocuments] = useState([]);
-  const [isDeleting, setIsDeleting] = useState(false);
-  
-  const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [aiAnalysisAlerts, setAiAnalysisAlerts] = useState(true);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
+  // Real User & Notification States
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -21,9 +21,13 @@ export default function Documents() {
   const [userEmail, setUserEmail] = useState('');
   const [profilePhoto, setProfilePhoto] = useState('');
 
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
   useEffect(() => {
     fetchUserData();
-    fetchDocuments();
+    fetchDocumentsForNotifs();
   }, []);
 
   const fetchUserData = async () => {
@@ -37,10 +41,9 @@ export default function Documents() {
     }
   };
 
-  const fetchDocuments = async () => {
+  const fetchDocumentsForNotifs = async () => {
     try {
       const { data } = await getDocuments();
-      setDocuments(data);
       const realNotifs = data.map(doc => ({
         id: doc._id,
         title: `Document ${doc.status}`,
@@ -48,54 +51,7 @@ export default function Documents() {
       }));
       setNotifications(realNotifs);
     } catch (error) {
-      console.error("Failed to fetch documents", error);
-    }
-  };
-
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!file) return;
-
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      await uploadDocument(formData);
-      setFile(null);
-      fetchDocuments();
-      alert("Document uploaded and analyzed successfully!");
-    } catch (error) {
-      console.error("Upload error", error);
-      alert("Failed to upload document.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this document?")) return;
-    
-    setIsDeleting(true);
-    try {
-      await deleteDocument(id);
-      setDocuments(documents.filter(doc => doc._id !== id));
-    } catch (error) {
-      alert("Error deleting document");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleRename = async (id, currentName) => {
-    const newName = window.prompt("Enter new file name (including extension like .pdf):", currentName);
-    if (!newName || newName === currentName) return; 
-
-    try {
-      const { data } = await updateDocument(id, { fileName: newName });
-      setDocuments(documents.map(doc => doc._id === id ? data : doc));
-    } catch (error) {
-      alert("Error renaming document");
+      console.error("Failed to fetch documents for notifications", error);
     }
   };
 
@@ -108,6 +64,33 @@ export default function Documents() {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
+
+  const handleSavePreferences = (e) => {
+    e.preventDefault();
+    setSuccessMessage('Preferences updated successfully!');
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!currentPassword || !newPassword) {
+      setErrorMessage("Please fill in both password fields.");
+      return;
+    }
+
+    try {
+      await updatePassword({ currentPassword, newPassword });
+      setSuccessMessage('Password updated successfully in database!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err) {
+      setErrorMessage(err.response?.data?.message || 'Failed to update password');
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -133,13 +116,13 @@ export default function Documents() {
           <Link to="/accounts" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
             <Wallet size={20} /> Accounts
           </Link>
-          <Link to="/documents" className="flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 text-finGreen rounded-xl font-medium border-l-4 border-finGreen">
+          <Link to="/documents" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
             <FileText size={20} /> Documents
           </Link>
           <Link to="/savings-advisor" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
             <Calculator size={20} /> Savings Advisor
           </Link>
-          <Link to="/settings" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
+          <Link to="/settings" className="flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 text-finGreen rounded-xl font-medium border-l-4 border-finGreen">
             <Settings size={20} /> Settings
           </Link>
         </nav>
@@ -153,9 +136,8 @@ export default function Documents() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        
         <header className="h-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-8 relative z-30">
-          <h2 className="text-xl font-semibold hidden sm:block">Document Management</h2>
+          <h2 className="text-xl font-semibold hidden sm:block">Account Settings</h2>
           
           <div className="flex items-center gap-6 ml-auto relative">
             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
@@ -241,94 +223,100 @@ export default function Documents() {
           </div>
         </header>
 
-        <div className="p-8 overflow-y-auto space-y-8">
-          <div>
-            <h3 className="text-2xl font-bold mb-1">Document Management</h3>
-            <p className="text-gray-500 dark:text-gray-400">Upload financial statements and view your stored files.</p>
+        <div className="p-8 overflow-y-auto max-w-4xl">
+          <div className="mb-8">
+            <h3 className="text-2xl font-bold mb-1">Preferences & Security</h3>
+            <p className="text-gray-500 dark:text-gray-400">Manage your profile notifications, security, and application settings.</p>
           </div>
 
-          {/* UPLOAD BOX */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl p-6 shadow-sm">
-            <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <Upload size={20} className="text-finGreen" /> Upload New Financial Document
-            </h4>
-            
-            <form onSubmit={handleUpload} className="flex flex-col sm:flex-row items-center gap-4">
-              <input 
-                type="file" 
-                onChange={(e) => setFile(e.target.files[0])}
-                className="w-full sm:w-auto flex-1 border dark:bg-gray-800 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm file:mr-4 file:py-1 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-finGreen hover:file:bg-green-100 cursor-pointer"
-                required
-              />
-              <button 
-                type="submit" 
-                disabled={uploading}
-                className="w-full sm:w-auto bg-finGreen text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
-              >
-                {uploading ? <><Loader2 size={18} className="animate-spin" /> Analyzing...</> : <><Upload size={18} /> Upload & Analyze</>}
-              </button>
-            </form>
-          </div>
-
-          {/* FILES TABLE */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-              <h4 className="font-bold text-lg">Your Files</h4>
+          {successMessage && (
+            <div className="mb-6 bg-green-100 dark:bg-green-900/30 text-finGreen px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+              <CheckCircle size={18} /> {successMessage}
             </div>
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-sm">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Date Uploaded</th>
-                  <th className="px-6 py-4 font-medium">File Name</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {documents.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
-                      No documents found. Upload your first document above.
-                    </td>
-                  </tr>
-                ) : (
-                  documents.map((doc) => (
-                    <tr key={doc._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-6 py-4">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 font-medium flex items-center gap-3">
-                        <FileText size={18} className="text-gray-400" />
-                        {doc.fileName}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-                          doc.status === 'Analyzed' ? 'bg-green-100 text-finGreen dark:bg-green-900/30' : 
-                          'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30'
-                        }`}>
-                          {doc.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleRename(doc._id, doc.fileName)}
-                          className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                          title="Rename File"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(doc._id)}
-                          disabled={isDeleting}
-                          className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          title="Delete File"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          )}
+
+          {errorMessage && (
+            <div className="mb-6 bg-red-100 text-red-600 px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+              {errorMessage}
+            </div>
+          )}
+
+          <div className="space-y-6">
+            
+            {/* NOTIFICATION PREFERENCES */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm">
+              <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <Bell size={20} className="text-finGreen" /> Notification Settings
+              </h4>
+              <form onSubmit={handleSavePreferences} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-sm">Email Notifications</p>
+                    <p className="text-xs text-gray-400">Receive weekly summaries and account alerts via email.</p>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={emailNotifications} 
+                    onChange={(e) => setEmailNotifications(e.target.checked)}
+                    className="w-5 h-5 accent-finGreen cursor-pointer" 
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div>
+                    <p className="font-medium text-sm">AI Document Analysis Alerts</p>
+                    <p className="text-xs text-gray-400">Get notified when document parsing and tax extraction finish.</p>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={aiAnalysisAlerts} 
+                    onChange={(e) => setAiAnalysisAlerts(e.target.checked)}
+                    className="w-5 h-5 accent-finGreen cursor-pointer" 
+                  />
+                </div>
+                <div className="pt-4 flex justify-end">
+                  <button type="submit" className="bg-finGreen text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-green-600 transition-colors">
+                    Save Preferences
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* SECURITY & PASSWORD CHANGE */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm">
+              <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <Shield size={20} className="text-finGreen" /> Security & Password
+              </h4>
+              <form onSubmit={handlePasswordChange} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Current Password</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                    className="w-full border dark:bg-gray-800 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-finGreen"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">New Password</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    className="w-full border dark:bg-gray-800 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-finGreen"
+                  />
+                </div>
+                <div className="pt-2 flex justify-end">
+                  <button type="submit" className="bg-finGreen text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-green-600 transition-colors flex items-center gap-2">
+                    <Lock size={16} /> Update Password
+                  </button>
+                </div>
+              </form>
+            </div>
+
           </div>
         </div>
       </main>
