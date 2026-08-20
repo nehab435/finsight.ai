@@ -1,214 +1,980 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { LayoutDashboard, Wallet, FileText, Settings, LogOut, Sun, Moon, PiggyBank, Calculator, AlertCircle, TrendingUp, Building } from 'lucide-react';
-import { getDocuments, getUserProfile } from '../api/api';
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Sun,
+  Moon,
+  LayoutDashboard,
+  Wallet,
+  FileText,
+  Settings,
+  Bell,
+  User,
+  LogOut,
+  Calculator,
+  TrendingUp,
+  PiggyBank,
+  Landmark,
+  IndianRupee,
+  AlertCircle,
+  ShieldCheck,
+  RefreshCw,
+} from "lucide-react";
+
+import { getUserProfile, getDocuments } from "../api/api";
 
 export default function SavingsAdvisor() {
   const navigate = useNavigate();
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('theme') === 'dark';
-  });
-  const [userName, setUserName] = useState('Loading...');
-  const [userEmail, setUserEmail] = useState('');
-  
-  // Comprehensive Financial & Savings Insights State
-  const [advisorData, setAdvisorData] = useState({ 
-    totalIncome: 322580.65, 
-    taxPaid: 32258.06, 
-    deductor: 'Microsoft India (R & D) Private Limited',
-    loanAdvice: 'No active loans detected. Consider refinancing existing home or auto loans if interest rates exceed 8.5%.',
-    budgetAdvice: 'Your savings rate is healthy. Recommend allocating 20% of net income into liquid mutual funds or high-yield savings.',
-    savingsTip: 'Optimize deductions under Section 80C and streamline recurring monthly subscriptions.'
+    const saved = localStorage.getItem("theme");
+    return saved ? saved === "dark" : true;
   });
 
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [userName, setUserName] = useState("Loading...");
+  const [profilePhoto, setProfilePhoto] = useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [documents, setDocuments] = useState([]);
+
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const [advisorData, setAdvisorData] = useState({
+    totalIncome: 0,
+    estimatedSavings: 0,
+    monthlySavings: 0,
+    deductor: "Not available",
+    savingsRate: 0,
+    recommendations: [],
+  });
+
+  // ---------------------------------------------------------
+  // THEME
+  // ---------------------------------------------------------
 
   useEffect(() => {
-    fetchUserData();
-    fetchFinancialDataFromDocuments();
-  }, []);
+    const root = document.documentElement;
 
-  const fetchUserData = async () => {
-    try {
-      const { data } = await getUserProfile();
-      setUserName(data.name || data.username || 'User');
-      setUserEmail(data.email || '');
-    } catch (error) {
-      console.error("Failed to fetch user profile", error);
-    }
-  };
-
-  const fetchFinancialDataFromDocuments = async () => {
-    try {
-      const { data } = await getDocuments();
-      const realNotifs = data.map(doc => ({
-        id: doc._id,
-        title: `Document ${doc.status}`,
-        desc: `${doc.fileName} parsed successfully for savings insights.`
-      }));
-      setNotifications(realNotifs);
-
-      let detectedIncome = 322580.65;
-      let detectedTDS = 32258.06;
-      let detectedDeductor = 'Microsoft India (R & D) Private Limited';
-
-      data.forEach(doc => {
-        const d = doc.extractedData || {};
-        const val = Number(d.totalValue) || Number(d.totalAmount) || Number(d.amount) || 0;
-        if (val > detectedIncome) {
-          detectedIncome = val;
-        }
-        const summaryText = (d.summary || d.analysis || '').toUpperCase();
-        if (summaryText.includes('KAUSALYA AGRO')) {
-          detectedDeductor = 'KAUSALYA AGRO FARMS AND DEVELOPERS PRIVATE LIMITED';
-        }
-      });
-
-      setAdvisorData({
-        totalIncome: detectedIncome,
-        taxPaid: detectedTDS,
-        deductor: detectedDeductor,
-        loanAdvice: detectedIncome > 300000 ? 'Eligible for pre-approved home loan balance transfers at lower interest rates (~8.2% p.a.).' : 'Maintain a debt-to-income ratio below 35% before applying for new credit.',
-        budgetAdvice: 'Allocate 50% to necessities, 30% to discretionary spending, and 20% to high-yield wealth building.',
-        savingsTip: 'You can save an estimated ₹32,258 annually by fully utilizing tax-saving instruments and expense tracking.'
-      });
-    } catch (err) {
-      console.error("Failed to fetch financial documents", err);
-    }
-  };
-
-  useEffect(() => {
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      root.classList.add("dark");
+      localStorage.setItem("theme", "dark");
     } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+      root.classList.remove("dark");
+      localStorage.setItem("theme", "light");
     }
   }, [isDarkMode]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/', { replace: true });
+  const toggleTheme = () => {
+    setIsDarkMode((prev) => !prev);
   };
 
+  // ---------------------------------------------------------
+  // SAFE NUMBER PARSER
+  // ---------------------------------------------------------
+
+  const parseValue = (value) => {
+    if (value === undefined || value === null) return 0;
+
+    if (typeof value === "number") {
+      return Number.isNaN(value) ? 0 : value;
+    }
+
+    const cleaned = String(value)
+      .replace(/,/g, "")
+      .replace(/[^0-9.-]/g, "");
+
+    const parsed = parseFloat(cleaned);
+
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  // ---------------------------------------------------------
+  // GET VALUE FROM MULTIPLE POSSIBLE DOCUMENT SCHEMAS
+  // ---------------------------------------------------------
+
+  const getDocumentValue = (doc, keys) => {
+    const data = doc?.extractedData || {};
+
+    const nestedData =
+      data?.extractedData ||
+      data?.data ||
+      {};
+
+    for (const key of keys) {
+      const value =
+        data?.[key] ??
+        nestedData?.[key] ??
+        doc?.[key];
+
+      const parsed = parseValue(value);
+
+      if (parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return 0;
+  };
+
+  // ---------------------------------------------------------
+  // EXTRACT AMOUNTS FROM TEXT AS FALLBACK
+  // ---------------------------------------------------------
+
+  const extractNumbersFromText = (text) => {
+    if (!text) return [];
+
+    const matches = String(text).match(
+      /(?:₹|Rs\.?|INR)?\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)/gi
+    );
+
+    if (!matches) return [];
+
+    return matches
+      .map((match) => parseValue(match))
+      .filter((value) => value > 100);
+  };
+
+  // ---------------------------------------------------------
+  // FIND INCOME
+  // ---------------------------------------------------------
+
+  const extractIncome = (doc) => {
+    const income = getDocumentValue(doc, [
+      "grossIncome",
+      "annualIncome",
+      "totalIncome",
+      "income",
+      "salary",
+      "grossSalary",
+      "totalEarnings",
+      "netIncome",
+    ]);
+
+    if (income > 0) return income;
+
+    const data = doc?.extractedData || {};
+    const nested =
+      data?.extractedData ||
+      data?.data ||
+      {};
+
+    const text =
+      data?.summary ||
+      nested?.summary ||
+      data?.analysis ||
+      nested?.analysis ||
+      data?.text ||
+      nested?.text ||
+      doc?.summary ||
+      doc?.text ||
+      "";
+
+    const numbers = extractNumbersFromText(text);
+
+    return numbers.length ? Math.max(...numbers) : 0;
+  };
+
+  // ---------------------------------------------------------
+  // GET DOCUMENT SOURCE / EMPLOYER DYNAMICALLY
+  // ---------------------------------------------------------
+
+  const extractSource = (doc) => {
+    const data = doc?.extractedData || {};
+
+    const nestedData =
+      data?.extractedData ||
+      data?.data ||
+      {};
+
+    const possibleFields = [
+      "employer",
+      "employerName",
+      "company",
+      "companyName",
+      "organization",
+      "organizationName",
+      "organisation",
+      "organisationName",
+      "deductor",
+      "deductorName",
+      "source",
+      "documentSource",
+      "issuer",
+      "issuerName",
+    ];
+
+    for (const key of possibleFields) {
+      const value =
+        data?.[key] ??
+        nestedData?.[key] ??
+        doc?.[key];
+
+      if (
+        value &&
+        typeof value === "string" &&
+        value.trim().length > 0
+      ) {
+        return value.trim();
+      }
+    }
+
+    // Fallback: search inside AI-extracted text
+    const text = String(
+      data?.summary ||
+      nestedData?.summary ||
+      data?.analysis ||
+      nestedData?.analysis ||
+      data?.text ||
+      nestedData?.text ||
+      doc?.summary ||
+      doc?.text ||
+      ""
+    );
+
+    const patterns = [
+      /(?:Employer|Employer Name)\s*[:\-]\s*([^\n,;]+)/i,
+      /(?:Company|Company Name)\s*[:\-]\s*([^\n,;]+)/i,
+      /(?:Organization|Organisation)\s*[:\-]\s*([^\n,;]+)/i,
+      /(?:Deductor|Deductor Name)\s*[:\-]\s*([^\n,;]+)/i,
+      /(?:Name of Employer)\s*[:\-]\s*([^\n,;]+)/i,
+      /(?:Name of Deductor)\s*[:\-]\s*([^\n,;]+)/i,
+      /(?:Issued By)\s*[:\-]\s*([^\n,;]+)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+
+      if (match?.[1]) {
+        return match[1].trim();
+      }
+    }
+
+    return "Extracted Financial Document";
+  };
+
+  // ---------------------------------------------------------
+  // BUILD REAL ADVICE
+  // ---------------------------------------------------------
+
+  const generateRecommendations = ({
+    totalIncome,
+    savingsRate,
+    documentCount,
+  }) => {
+    const recommendations = [];
+
+    if (totalIncome <= 0) {
+      return [
+        {
+          type: "info",
+          title: "Upload financial documents",
+          description:
+            "Upload salary slips, bank statements, tax documents, or investment documents to generate personalized financial insights.",
+        },
+      ];
+    }
+
+    if (savingsRate < 20) {
+      recommendations.push({
+        type: "warning",
+        title: "Increase your savings rate",
+        description:
+          "Your estimated savings allocation is below the recommended 20% benchmark. Consider automating monthly transfers into savings or investments.",
+      });
+    } else if (savingsRate < 35) {
+      recommendations.push({
+        type: "good",
+        title: "Healthy savings potential",
+        description:
+          "Your current financial profile supports a balanced savings strategy. Consider splitting savings between an emergency fund and long-term investments.",
+      });
+    } else {
+      recommendations.push({
+        type: "excellent",
+        title: "Strong savings capacity",
+        description:
+          "Your financial profile indicates strong saving potential. Consider diversifying surplus funds into suitable long-term investment instruments.",
+      });
+    }
+
+    if (documentCount < 2) {
+      recommendations.push({
+        type: "info",
+        title: "Add more financial data",
+        description:
+          "Upload additional financial documents to improve the accuracy of income analysis and personalized financial recommendations.",
+      });
+    }
+
+    recommendations.push({
+      type: "investment",
+      title: "Build an emergency fund",
+      description:
+        "Aim to maintain approximately 3–6 months of essential expenses in a liquid emergency fund before allocating more aggressively toward long-term investments.",
+    });
+
+    return recommendations;
+  };
+
+  // ---------------------------------------------------------
+  // FETCH USER + DOCUMENTS
+  // ---------------------------------------------------------
+
+  const fetchAdvisorData = async () => {
+    try {
+      setLoading(true);
+
+      const [userResponse, documentsResponse] =
+        await Promise.all([
+          getUserProfile(),
+          getDocuments(),
+        ]);
+
+      const userData =
+        userResponse?.data?.user ||
+        userResponse?.data ||
+        {};
+
+      setUserName(
+        userData?.name ||
+          userData?.username ||
+          "User"
+      );
+
+      setProfilePhoto(
+        userData?.profilePhoto || ""
+      );
+
+      const docs =
+        documentsResponse?.data?.documents ||
+        documentsResponse?.data ||
+        [];
+
+      const safeDocuments = Array.isArray(docs)
+        ? docs
+        : [];
+
+      setDocuments(safeDocuments);
+
+      let totalIncome = 0;
+      let source = "Not available";
+
+      safeDocuments.forEach((doc) => {
+        const income = extractIncome(doc);
+
+        totalIncome += income;
+
+        if (source === "Not available") {
+          const extractedSource =
+            extractSource(doc);
+
+          if (
+            extractedSource &&
+            extractedSource !==
+              "Extracted Financial Document"
+          ) {
+            source = extractedSource;
+          }
+        }
+      });
+
+      /*
+       * Recommended savings calculation.
+       * Based on detected income without inventing
+       * expenses or bank balances.
+       */
+
+      const recommendedSavingsRate =
+        totalIncome > 0 ? 20 : 0;
+
+      const estimatedSavings =
+        (totalIncome *
+          recommendedSavingsRate) /
+        100;
+
+      const monthlySavings =
+        estimatedSavings / 12;
+
+      const recommendations =
+        generateRecommendations({
+          totalIncome,
+          savingsRate:
+            recommendedSavingsRate,
+          documentCount:
+            safeDocuments.length,
+        });
+
+      setAdvisorData({
+        totalIncome,
+        estimatedSavings,
+        monthlySavings,
+        deductor: source,
+        savingsRate:
+          recommendedSavingsRate,
+        recommendations,
+      });
+    } catch (error) {
+      console.error(
+        "Failed to load savings advisor data:",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdvisorData();
+  }, []);
+
+  // ---------------------------------------------------------
+  // LOGOUT
+  // ---------------------------------------------------------
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+
+    navigate("/", {
+      replace: true,
+    });
+  };
+
+  // ---------------------------------------------------------
+  // FORMAT CURRENCY
+  // ---------------------------------------------------------
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount || 0);
+  };
+
+  // ---------------------------------------------------------
+  // RECOMMENDATION ICON
+  // ---------------------------------------------------------
+
+  const getRecommendationIcon = (type) => {
+    switch (type) {
+      case "good":
+      case "excellent":
+        return <TrendingUp size={20} />;
+
+      case "investment":
+        return <Landmark size={20} />;
+
+      case "warning":
+        return <AlertCircle size={20} />;
+
+      default:
+        return <ShieldCheck size={20} />;
+    }
+  };
+
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-finDark text-gray-900 dark:text-gray-100 transition-colors relative">
-      
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 hidden md:flex flex-col">
-        <div className="p-6 flex items-center gap-3">
-          <div className="text-finGreen">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">FinSight</h1>
+    <div
+      className={`flex min-h-screen font-sans transition-colors ${
+        isDarkMode
+          ? "bg-[#040B16] text-white"
+          : "bg-slate-50 text-slate-900"
+      }`}
+    >
+      {/* ================= SIDEBAR ================= */}
+
+      <aside
+        className={`w-64 border-r hidden md:flex flex-col ${
+          isDarkMode
+            ? "bg-[#060E1D] border-white/10"
+            : "bg-white border-slate-200"
+        }`}
+      >
+        <div className="p-6">
+          <h1 className="text-2xl font-bold tracking-tight">
+            finsight
+            <span className="text-[#00DF81]">
+              .ai
+            </span>
+          </h1>
         </div>
-        
+
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          <Link to="/dashboard" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
-            <LayoutDashboard size={20} /> Dashboard
+          <Link
+            to="/dashboard"
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+              isDarkMode
+                ? "text-gray-400 hover:text-white hover:bg-white/5"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <LayoutDashboard size={20} />
+            Dashboard
           </Link>
-          <Link to="/accounts" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
-            <Wallet size={20} /> Accounts
+
+          <Link
+            to="/accounts"
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+              isDarkMode
+                ? "text-gray-400 hover:text-white hover:bg-white/5"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Wallet size={20} />
+            Accounts
           </Link>
-          <Link to="/documents" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
-            <FileText size={20} /> Documents
+
+          <Link
+            to="/documents"
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+              isDarkMode
+                ? "text-gray-400 hover:text-white hover:bg-white/5"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <FileText size={20} />
+            Documents
           </Link>
-          <Link to="/savings-advisor" className="flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 text-finGreen rounded-xl font-medium border-l-4 border-finGreen">
-            <PiggyBank size={20} /> Savings Advisor
+
+          <Link
+            to="/savings-advisor"
+            className="flex items-center gap-3 px-4 py-3 bg-[#00DF81]/10 text-[#00DF81] rounded-xl font-medium border-l-4 border-[#00DF81]"
+          >
+            <Calculator size={20} />
+            Savings Advisor
           </Link>
-          <Link to="/settings" className="flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">
-            <Settings size={20} /> Settings
+
+          <Link
+            to="/settings"
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+              isDarkMode
+                ? "text-gray-400 hover:text-white hover:bg-white/5"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Settings size={20} />
+            Settings
           </Link>
         </nav>
-        
+
         <div className="p-4">
-          <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3 w-full text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors">
-            <LogOut size={20} /> Logout
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+          >
+            <LogOut size={20} />
+            Logout
           </button>
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-8 z-30">
-          <h2 className="text-xl font-semibold">AI Savings & Wealth Advisor</h2>
-          
-          <div className="flex items-center gap-6 ml-auto relative">
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 transition-colors">
-              {isDarkMode ? <Sun size={20} className="text-yellow-500" /> : <Moon size={20} className="text-gray-600" />}
+      {/* ================= MAIN ================= */}
+
+      <main className="flex-1 min-w-0">
+        {/* ================= HEADER ================= */}
+
+        <header
+          className={`h-20 border-b flex items-center justify-between px-6 md:px-8 ${
+            isDarkMode
+              ? "bg-[#060E1D]/50 border-white/10"
+              : "bg-white border-slate-200"
+          }`}
+        >
+          <div>
+            <h2 className="text-xl font-semibold">
+              AI Savings & Wealth Advisor
+            </h2>
+
+            <p className="text-sm text-gray-400 mt-1">
+              Personalized insights based on your uploaded financial documents
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={fetchAdvisorData}
+              className={`p-2.5 rounded-full transition ${
+                isDarkMode
+                  ? "hover:bg-white/10"
+                  : "hover:bg-slate-100"
+              }`}
+              title="Refresh data"
+            >
+              <RefreshCw size={19} />
             </button>
+
+            <button
+              onClick={toggleTheme}
+              className={`p-2.5 border rounded-full ${
+                isDarkMode
+                  ? "bg-white/10 border-white/10"
+                  : "bg-slate-100 border-slate-200"
+              }`}
+            >
+              {isDarkMode ? (
+                <Sun
+                  size={18}
+                  className="text-yellow-400"
+                />
+              ) : (
+                <Moon size={18} />
+              )}
+            </button>
+
+            {/* NOTIFICATIONS */}
+
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setNotificationsOpen(
+                    !notificationsOpen
+                  );
+                  setProfileOpen(false);
+                }}
+                className="relative p-2"
+              >
+                <Bell size={20} />
+
+                {documents.length > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-[#00DF81] rounded-full" />
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div
+                  className={`absolute right-0 mt-3 w-72 p-4 rounded-2xl border shadow-xl z-50 ${
+                    isDarkMode
+                      ? "bg-[#060E1D] border-white/10"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <h4 className="font-semibold mb-3">
+                    Financial Data
+                  </h4>
+
+                  <p className="text-sm text-gray-400">
+                    {documents.length} uploaded document
+                    {documents.length !== 1
+                      ? "s"
+                      : ""}{" "}
+                    analyzed.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* PROFILE */}
+
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setProfileOpen(!profileOpen);
+                  setNotificationsOpen(false);
+                }}
+                className="flex items-center gap-2"
+              >
+                {profilePhoto ? (
+                  <img
+                    src={profilePhoto}
+                    alt="Profile"
+                    className="w-9 h-9 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#00DF81]/20 text-[#00DF81] flex items-center justify-center">
+                    <User size={18} />
+                  </div>
+                )}
+
+                <span className="hidden sm:block text-sm font-medium">
+                  {userName}
+                </span>
+              </button>
+
+              {profileOpen && (
+                <div
+                  className={`absolute right-0 mt-3 w-52 p-3 rounded-2xl border shadow-xl z-50 ${
+                    isDarkMode
+                      ? "bg-[#060E1D] border-white/10"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-red-500 rounded-lg hover:bg-red-500/10"
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
-        <div className="p-8 overflow-y-auto flex-1 space-y-8">
-          <div>
-            <h3 className="text-2xl font-bold">Personalized Financial Optimization</h3>
-            <p className="text-gray-500 text-sm">Actionable advice on taxes, loans, budgeting, and wealth acceleration derived from your documents.</p>
-          </div>
+        {/* ================= CONTENT ================= */}
 
-          {/* METRICS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
-              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Parsed Revenue</p>
-              <h2 className="text-3xl font-extrabold mt-1">₹{advisorData.totalIncome.toLocaleString()}</h2>
-            </div>
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
-              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Tax Credits / TDS</p>
-              <h2 className="text-3xl font-extrabold mt-1 text-finGreen">₹{advisorData.taxPaid.toLocaleString()}</h2>
-            </div>
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
-              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Primary Income Source</p>
-              <h2 className="text-xs font-bold mt-2 text-gray-700 dark:text-gray-300 truncate" title={advisorData.deductor}>{advisorData.deductor}</h2>
-            </div>
-          </div>
+        <div className="w-full px-6 md:px-10 lg:px-16 xl:px-20 2xl:px-28 py-7">
+          {loading ? (
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center">
+                <RefreshCw
+                  className="animate-spin mx-auto mb-4 text-[#00DF81]"
+                  size={32}
+                />
 
-          {/* ADVISORY CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6 rounded-3xl shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 text-finGreen rounded-xl"><Calculator size={22} /></div>
-                <h4 className="font-bold text-lg">Tax Saving Strategy</h4>
+                <p className="text-gray-400">
+                  Analyzing your financial documents...
+                </p>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                {advisorData.savingsTip} Maximize exemptions under Section 80C (ELSS, PPF) and health insurance under 80D to minimize outflow.
-              </p>
             </div>
+          ) : (
+            <>
+              {/* ================= TOP CARDS ================= */}
 
-            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6 rounded-3xl shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-xl"><Building size={22} /></div>
-                <h4 className="font-bold text-lg">Loan & Debt Optimization</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mb-7">
+                {/* DETECTED INCOME */}
+
+                <div
+                  className={`min-h-[134px] p-6 rounded-2xl border ${
+                    isDarkMode
+                      ? "bg-[#060E1D] border-white/10"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm text-gray-400">
+                      Detected Income
+                    </span>
+
+                    <IndianRupee
+                      className="text-[#00DF81]"
+                      size={20}
+                    />
+                  </div>
+
+                  <h3 className="text-2xl font-bold">
+                    {formatCurrency(
+                      advisorData.totalIncome
+                    )}
+                  </h3>
+                </div>
+
+                {/* ANNUAL SAVINGS */}
+
+                <div
+                  className={`min-h-[134px] p-6 rounded-2xl border ${
+                    isDarkMode
+                      ? "bg-[#060E1D] border-white/10"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm text-gray-400">
+                      Recommended Annual Savings
+                    </span>
+
+                    <PiggyBank
+                      className="text-[#00DF81]"
+                      size={20}
+                    />
+                  </div>
+
+                  <h3 className="text-2xl font-bold">
+                    {formatCurrency(
+                      advisorData.estimatedSavings
+                    )}
+                  </h3>
+
+                  <p className="text-xs text-gray-400 mt-2">
+                    Based on a{" "}
+                    {advisorData.savingsRate}%
+                    savings target
+                  </p>
+                </div>
+
+                {/* MONTHLY SAVINGS */}
+
+                <div
+                  className={`min-h-[134px] p-6 rounded-2xl border ${
+                    isDarkMode
+                      ? "bg-[#060E1D] border-white/10"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm text-gray-400">
+                      Monthly Savings Target
+                    </span>
+
+                    <TrendingUp
+                      className="text-purple-400"
+                      size={20}
+                    />
+                  </div>
+
+                  <h3 className="text-2xl font-bold">
+                    {formatCurrency(
+                      advisorData.monthlySavings
+                    )}
+                  </h3>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                {advisorData.loanAdvice} Refinance high-interest liabilities or consolidate loans to reduce overall interest burden.
-              </p>
-            </div>
 
-            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6 rounded-3xl shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 text-purple-500 rounded-xl"><PiggyBank size={22} /></div>
-                <h4 className="font-bold text-lg">Budgeting & Expense Control</h4>
+              {/* ================= TWO COLUMN LAYOUT ================= */}
+
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.1fr)_minmax(320px,0.9fr)] gap-6 items-start">
+                {/* LEFT SIDE */}
+
+                <div className="min-w-0">
+                  <div className="mb-5">
+                    <h3 className="text-xl font-semibold">
+                      Personalized Recommendations
+                    </h3>
+
+                    <p className="text-sm text-gray-400 mt-1">
+                      Generated from your uploaded financial data
+                    </p>
+                  </div>
+
+                  <div className="space-y-5">
+                    {advisorData.recommendations.map(
+                      (recommendation, index) => (
+                        <div
+                          key={index}
+                          className={`w-full p-5 rounded-2xl border flex gap-4 ${
+                            isDarkMode
+                              ? "bg-[#060E1D] border-white/10"
+                              : "bg-white border-slate-200"
+                          }`}
+                        >
+                          <div className="w-11 h-11 shrink-0 rounded-xl bg-[#00DF81]/10 text-[#00DF81] flex items-center justify-center">
+                            {getRecommendationIcon(
+                              recommendation.type
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <h4 className="font-semibold mb-1">
+                              {recommendation.title}
+                            </h4>
+
+                            <p className="text-sm text-gray-400 leading-relaxed">
+                              {
+                                recommendation.description
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT SIDE */}
+
+                <div
+                  className={`w-full p-6 rounded-2xl border ${
+                    isDarkMode
+                      ? "bg-[#060E1D] border-white/10"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-7">
+                    <div className="w-10 h-10 rounded-xl bg-[#00DF81]/10 text-[#00DF81] flex items-center justify-center">
+                      <Calculator size={20} />
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold">
+                        Financial Summary
+                      </h3>
+
+                      <p className="text-xs text-gray-400">
+                        Based on analyzed documents
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Document Source
+                      </p>
+
+                      <p className="text-sm font-semibold break-words">
+                        {advisorData.deductor}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Documents Analyzed
+                      </p>
+
+                      <p className="text-sm font-semibold">
+                        {documents.length}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Detected Income
+                      </p>
+
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(
+                          advisorData.totalIncome
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Recommended Annual Savings
+                      </p>
+
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(
+                          advisorData.estimatedSavings
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Monthly Savings Target
+                      </p>
+
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(
+                          advisorData.monthlySavings
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`mt-7 pt-5 border-t ${
+                      isDarkMode
+                        ? "border-white/10"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Insights are generated from the
+                      financial information available in
+                      your uploaded documents. Upload more
+                      documents for richer and more
+                      accurate analysis.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                {advisorData.budgetAdvice} Audit monthly subscriptions and automate savings transfers on payday to prevent lifestyle creep.
-              </p>
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6 rounded-3xl shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-500 rounded-xl"><TrendingUp size={22} /></div>
-                <h4 className="font-bold text-lg">Wealth Growth Insights</h4>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                Based on your cash flow from <span className="font-semibold text-finGreen">{advisorData.deductor}</span>, systematic investment plans (SIPs) in index funds can compound wealth effectively over a 5-10 year horizon.
-              </p>
-            </div>
-
-          </div>
+            </>
+          )}
         </div>
       </main>
     </div>

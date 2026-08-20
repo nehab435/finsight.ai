@@ -31,12 +31,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public / Auth Pages (Blocked if already logged in) */}
+        {/* Public / Auth Pages */}
         <Route path="/" element={<PublicOnlyRoute><Landing /></PublicOnlyRoute>} />
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
         <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
 
-        {/* Protected Dashboard & Financial Pages (Blocked if logged out) */}
+        {/* Protected Dashboard & Financial Pages */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
         <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
